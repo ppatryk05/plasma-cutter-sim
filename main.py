@@ -20,6 +20,7 @@ def main() -> None:
 
         # --- Events ---
         for event in pygame.event.get():
+            renderer.handle_event(event)
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:

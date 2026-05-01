@@ -8,6 +8,8 @@ class SheetMetal:
         self.height = 600   # mm / pixels in the grid
         # False = intact sheet, True = cut away
         self.grid = np.zeros((self.height, self.width), dtype=bool)
+        # Incremented on every cut() call so renderers can detect changes cheaply.
+        self.version: int = 0
 
     def cut(self, x: float, y: float, radius: int = 3) -> None:
         """Mark a circular area around (x, y) as cut."""
@@ -23,6 +25,16 @@ class SheetMetal:
         xx, yy = np.meshgrid(xs, ys)
         mask = (xx - cx) ** 2 + (yy - cy) ** 2 <= radius ** 2
         self.grid[y0:y1, x0:x1][mask] = True
+        self.version += 1
+
+    def get_cut_quads(self) -> list[tuple[int, int]]:
+        """Return a list of (x, y) integer positions that have been cut.
+
+        Each entry represents a 1 mm cell whose centre is cut away.
+        Useful for OpenGL rendering passes that want individual quad positions.
+        """
+        ys, xs = np.where(self.grid)
+        return list(zip(xs.tolist(), ys.tolist()))
 
     def get_surface(self, scale: float) -> pygame.Surface:
         """Return a pygame.Surface showing the sheet at the given scale.
