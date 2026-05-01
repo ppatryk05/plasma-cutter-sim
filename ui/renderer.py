@@ -57,6 +57,13 @@ class Renderer:
     TEX_W = 512
     TEX_H = 256
 
+    # Number of fixed HUD display lines
+    HUD_SLOT_COUNT = 4
+
+    # Sheet-metal surface colours (RGB 0–255)
+    _COLOR_METAL_INTACT = (145, 140, 130)
+    _COLOR_METAL_CUT    = (22,  15,  10)
+
     def __init__(self) -> None:
         pygame.init()
         self.screen = pygame.display.set_mode(
@@ -85,7 +92,7 @@ class Renderer:
 
         # --- HUD text texture cache: slot index → (tex_id, w, h, last_text, last_color) ---
         # One fixed slot per HUD line; texture is re-created only when text/color changes.
-        self._hud_slots: list[tuple | None] = [None, None, None, None]
+        self._hud_slots: list[tuple | None] = [None] * self.HUD_SLOT_COUNT
 
         self._init_gl()
 
@@ -159,8 +166,8 @@ class Renderer:
         sub = sheet.grid[np.ix_(iy, ix)]          # (TEX_H, TEX_W) bool
 
         img = np.empty((self.TEX_H, self.TEX_W, 3), dtype=np.uint8)
-        img[ sub] = (22,  15,  10)    # cut areas  – very dark
-        img[~sub] = (145, 140, 130)   # intact     – grey metal
+        img[ sub] = self._COLOR_METAL_CUT
+        img[~sub] = self._COLOR_METAL_INTACT
 
         glBindTexture(GL_TEXTURE_2D, self._sheet_tex)
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
@@ -403,7 +410,7 @@ class Renderer:
         if cached is None or cached[3] != text or cached[4] != color:
             # Release the old texture for this slot if any
             if cached is not None:
-                glDeleteTextures(cached[0])
+                glDeleteTextures([cached[0]])
 
             surf = font.render(text, True, color)
             w, h = surf.get_size()
