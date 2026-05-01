@@ -436,8 +436,8 @@ class Renderer:
         legend = [
             ("--- STEROWANIE ---",  (160, 160, 200)),
             ("Strzalki  ruch",      (200, 200, 200)),
-            ("Shift     szybko",    (200, 200, 200)),
-            ("Ctrl      precyzja",  (200, 200, 200)),
+            ("]         szybciej",  (200, 200, 200)),
+            ("[         wolniej",   (200, 200, 200)),
             ("Spacja    plasma",    (200, 200, 200)),
             ("--- NARZEDZIA ---",   (160, 160, 200)),
             ("R         reset",     (200, 200, 200)),

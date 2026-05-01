@@ -30,6 +30,10 @@ def main() -> None:
                     machine.head.reset()
                 elif event.key == pygame.K_c:
                     machine.sheet.clear()
+                elif event.key == pygame.K_RIGHTBRACKET:
+                    machine.head.set_speed(machine.head.speed + 50.0)
+                elif event.key == pygame.K_LEFTBRACKET:
+                    machine.head.set_speed(machine.head.speed - 50.0)
 
         # --- Simulation step ---
         keys = pygame.key.get_pressed()

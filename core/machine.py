@@ -18,15 +18,8 @@ from core.sheet_metal import SheetMetal
 class CutterMachine:
     """Coordinates the plasma-cutter simulation components.
 
-    Speed modifiers (applied while the key is held):
-        Shift  – boost to 400 mm/s
-        Ctrl   – precision at 80 mm/s
-        (none) – normal 200 mm/s
+    Speed is set externally via head.set_speed() (e.g. [ / ] keys).
     """
-
-    _SPEED_NORMAL    = 200.0   # mm/s
-    _SPEED_BOOST     = 400.0   # mm/s
-    _SPEED_PRECISION = 80.0    # mm/s
 
     def __init__(self) -> None:
         self.head     = PlasmaHead()
@@ -47,14 +40,6 @@ class CutterMachine:
         if dx != 0.0 and dy != 0.0:
             dx *= 1.0 / math.sqrt(2.0)
             dy *= 1.0 / math.sqrt(2.0)
-
-        # --- Speed modifier ---
-        if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-            self.head.set_speed(self._SPEED_BOOST)
-        elif keys[pygame.K_LCTRL] or keys[pygame.K_RCTRL]:
-            self.head.set_speed(self._SPEED_PRECISION)
-        else:
-            self.head.set_speed(self._SPEED_NORMAL)
 
         # move() handles both acceleration and deceleration (dx=dy=0 → slow down)
         self.head.move(dx, dy, dt)
