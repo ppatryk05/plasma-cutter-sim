@@ -57,8 +57,8 @@ class Renderer:
     TEX_W = 512
     TEX_H = 256
 
-    # Number of fixed HUD display lines
-    HUD_SLOT_COUNT = 4
+    # Number of fixed HUD display lines (4 status + 10 legend)
+    HUD_SLOT_COUNT = 14
 
     # Sheet-metal surface colours (RGB 0–255)
     _COLOR_METAL_INTACT = (145, 140, 130)
@@ -286,6 +286,42 @@ class Renderer:
         self._draw_box(hx - NOZZLE_R, nz_y0, hz - NOZZLE_R,
                        hx + NOZZLE_R, nz_y1, hz + NOZZLE_R, c_nozzle)
 
+    def _draw_floor_grid(self) -> None:
+        """Draw a flat grid on the floor below the machine (Y = -0.40)."""
+        FLOOR_Y  = -0.42
+        # Grid extends well beyond the sheet so the scene feels grounded
+        GX0, GX1 = -2.0, 12.0
+        GZ0, GZ1 = -2.0,  8.0
+        STEP     =  1.0   # 1 OpenGL unit = 100 mm
+
+        glDisable(GL_DEPTH_TEST)
+        glLineWidth(1.0)
+        glColor4f(0.28, 0.28, 0.35, 0.55)
+        glBegin(GL_LINES)
+        x = GX0
+        while x <= GX1 + 1e-6:
+            glVertex3f(x, FLOOR_Y, GZ0)
+            glVertex3f(x, FLOOR_Y, GZ1)
+            x += STEP
+        z = GZ0
+        while z <= GZ1 + 1e-6:
+            glVertex3f(GX0, FLOOR_Y, z)
+            glVertex3f(GX1, FLOOR_Y, z)
+            z += STEP
+        glEnd()
+
+        # Slightly brighter border around the grid
+        glLineWidth(1.8)
+        glColor4f(0.40, 0.40, 0.52, 0.75)
+        glBegin(GL_LINE_LOOP)
+        glVertex3f(GX0, FLOOR_Y, GZ0)
+        glVertex3f(GX1, FLOOR_Y, GZ0)
+        glVertex3f(GX1, FLOOR_Y, GZ1)
+        glVertex3f(GX0, FLOOR_Y, GZ1)
+        glEnd()
+        glLineWidth(1.0)
+        glEnable(GL_DEPTH_TEST)
+
     def _draw_plasma_glow(self, head: PlasmaHead) -> None:
         hx = head.x * MM_TO_GL
         hz = head.y * MM_TO_GL
@@ -375,10 +411,10 @@ class Renderer:
         plasma_color = (255, 220, 50) if head.plasma_on else (160, 160, 160)
 
         lines = [
-            (f"X: {head.x:7.1f} mm",           (220, 220, 220), self.font),
-            (f"Y: {head.y:7.1f} mm",           (220, 220, 220), self.font),
-            (f"Speed: {head.speed:.0f} mm/s",  (180, 180, 180), self.font),
-            (f"PLASMA: {plasma_str}",           plasma_color,    self.font_big),
+            (f"X: {head.x:7.1f} mm",                            (220, 220, 220), self.font),
+            (f"Y: {head.y:7.1f} mm",                            (220, 220, 220), self.font),
+            (f"Speed: {head.current_speed:5.0f}/{head.speed:.0f} mm/s", (180, 180, 180), self.font),
+            (f"PLASMA: {plasma_str}",                            plasma_color,    self.font_big),
         ]
 
         hud_x, hud_y = 12, 12
@@ -386,12 +422,35 @@ class Renderer:
             self._blit_text(slot, text, fnt, color, hud_x, hud_y)
             hud_y += fnt.get_linesize() + 4
 
+        self._draw_legend()
+
         # Restore 3-D state
         glMatrixMode(GL_PROJECTION)
         glPopMatrix()
         glMatrixMode(GL_MODELVIEW)
         glPopMatrix()
         glEnable(GL_DEPTH_TEST)
+
+    def _draw_legend(self) -> None:
+        """Draw a static key-binding legend on the right side of the screen."""
+        legend = [
+            ("--- STEROWANIE ---",  (160, 160, 200)),
+            ("Strzalki  ruch",      (200, 200, 200)),
+            ("Shift     szybko",    (200, 200, 200)),
+            ("Ctrl      precyzja",  (200, 200, 200)),
+            ("Spacja    plasma",    (200, 200, 200)),
+            ("--- NARZEDZIA ---",   (160, 160, 200)),
+            ("R         reset",     (200, 200, 200)),
+            ("C         czyszczenie blachy", (200, 200, 200)),
+            ("LPM drag  kamera",    (200, 200, 200)),
+            ("Scroll    zoom",      (200, 200, 200)),
+        ]
+        x = self.WINDOW_W - 260
+        y = 12
+        for i, (text, color) in enumerate(legend):
+            slot = 4 + i  # slots 0-3 reserved for status HUD
+            self._blit_text(slot, text, self.font, color, x, y)
+            y += self.font.get_linesize() + 4
 
     def _blit_text(self,
                    slot:  int,
@@ -451,6 +510,7 @@ class Renderer:
         glMatrixMode(GL_MODELVIEW)
         self._apply_camera()
 
+        self._draw_floor_grid()
         self._draw_sheet(sheet)
         self._draw_gantry(head)
 

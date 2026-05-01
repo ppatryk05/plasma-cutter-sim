@@ -27,6 +27,11 @@ class SheetMetal:
         self.grid[y0:y1, x0:x1][mask] = True
         self.version += 1
 
+    def clear(self) -> None:
+        """Reset the sheet – remove all cuts."""
+        self.grid[:] = False
+        self.version += 1
+
     def get_cut_quads(self) -> list[tuple[int, int]]:
         """Return a list of (x, y) integer positions that have been cut.
 
