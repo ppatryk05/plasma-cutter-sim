@@ -1,29 +1,158 @@
-# 3D Printer Simulation (Task 6)
+# Symulator Drukarki 3D — Zadanie 6
 
-Python project for animated visualization of 3D printer operation, including:
-- G-code parsing and timeline playback
-- XYZ head kinematics with soft limits
-- Thermal model for nozzle and bed
-- Material deposition model (layered path reconstruction)
-- Collision and safety checks
-- Session replay (save/load)
-- Desktop GUI with 3D viewport and diagnostics
+Animowana wizualizacja pracy drukarki 3D z pełnym modelem kinematycznym, termicznym i wizualnym.
 
-## Quick start
+---
 
-1. Create a virtual environment and install dependencies:
-   - `pip install -r requirements.txt`
-2. Run:
-   - `python -m src.main`
+## Wymagania
 
-## Controls
+- **Python 3.11 lub nowszy** (projekt testowany na 3.14)
+- **Git** (opcjonalnie, do klonowania repo)
 
-- `Load G-code` to open a file
-- `Play/Pause` to control simulation
-- `Speed` slider for timeline speed
-- `Export/Import Replay` to save and replay simulation runs
+Sprawdź wersję Pythona:
+```
+python --version
+```
 
-## Notes
+---
 
-- 3D viewport uses `pyqtgraph.opengl` to stay stable with PyQt6 integration.
-- `ursina` is included in dependencies for optional future high-fidelity viewport mode.
+## Instalacja krok po kroku
+
+### 1. Pobierz / sklonuj projekt
+
+Jeśli masz repo na GitHubie:
+```
+git clone <adres-repo>
+cd 3Dprinter_project
+```
+
+Albo po prostu skopiuj folder projektu i otwórz go w terminalu.
+
+### 2. (Zalecane) Utwórz wirtualne środowisko
+
+```
+python -m venv .venv
+```
+
+Aktywacja na **Windows**:
+```
+.venv\Scripts\activate
+```
+
+Aktywacja na **macOS / Linux**:
+```
+source .venv/bin/activate
+```
+
+### 3. Zainstaluj zależności
+
+```
+pip install -r requirements.txt
+```
+
+> Pierwsze uruchomienie może potrwać 2–5 minut — pobierane są duże pakiety (PyQt6, pyqtgraph, numba itp.).
+
+---
+
+## Uruchomienie
+
+### Opcja A — przez Cursor / VS Code (kliknij Run)
+
+Otwórz plik `run.py` i kliknij przycisk **Run** (▶) — aplikacja uruchomi się od razu.
+
+### Opcja B — z terminala
+
+```
+python run.py
+```
+
+lub:
+
+```
+python src/main.py
+```
+
+lub jako moduł:
+
+```
+python -m src.main
+```
+
+---
+
+## Obsługa programu
+
+| Akcja | Co robi |
+|---|---|
+| **Załaduj G-code** | Otwiera plik `.gcode` do symulacji |
+| **Play / Pauza** lub `Spacja` | Startuje / zatrzymuje odtwarzanie |
+| **Restart** | Wraca do początku symulacji |
+| **Suwak Prędkość** | Reguluje ile kroków/klatkę (1× – 50×) |
+| **Zapisz sesję (JSON)** | Eksportuje przebieg symulacji do pliku |
+
+### Sterowanie widokiem 3D
+
+| Akcja | Sterowanie |
+|---|---|
+| Obracanie widoku | Lewy przycisk myszy + przeciągnij |
+| Zoom | Scroll myszki |
+| Przesuwanie widoku | Prawy przycisk myszy + przeciągnij |
+
+---
+
+## Struktura projektu
+
+```
+3Dprinter_project/
+├── run.py                  ← punkt startowy (kliknij Run tutaj)
+├── requirements.txt
+├── examples/
+│   └── sample.gcode        ← przykładowy plik G-code (5 warstw)
+├── src/
+│   ├── main.py             ← inicjalizacja aplikacji Qt
+│   ├── core/
+│   │   ├── gcode_parser.py ← parsowanie G-code
+│   │   ├── kinematics.py   ← model ruchu osi X/Y/Z
+│   │   ├── thermal_model.py← temperatura dyszy i stołu
+│   │   └── material_model.py← odkładanie filamentu
+│   ├── sim/
+│   │   ├── simulator.py    ← pipeline symulacji + interpolacja
+│   │   └── collision.py    ← walidacja granic ruchu
+│   ├── render/
+│   │   └── scene3d.py      ← viewport 3D (pyqtgraph.opengl)
+│   ├── ui/
+│   │   └── main_window.py  ← okno główne (PyQt6)
+│   └── io/
+│       └── session_replay.py← zapis/odczyt sesji JSON
+└── docs/
+    └── IMPLEMENTATION.md   ← opis architektury
+```
+
+---
+
+## Własny plik G-code
+
+Możesz załadować dowolny plik `.gcode` przez przycisk **Załaduj G-code**.  
+Obsługiwane komendy: `G0`, `G1`, `M104`, `M109`, `M140`, `M190`.
+
+Przykład prostego pliku:
+```gcode
+M104 S205        ; temperatura dyszy
+M140 S60         ; temperatura stołu
+G1 Z0.2 F600
+G1 X100 Y100 F9000
+G1 X200 Y100 E5.0 F4800
+G1 X200 Y200 E10.0
+```
+
+---
+
+## Problemy
+
+**Program się nie uruchamia po instalacji?**
+- Upewnij się że środowisko wirtualne jest aktywne (`pip list` powinien pokazać `PyQt6`)
+- Sprawdź wersję Pythona: musi być ≥ 3.11
+
+**Okno jest czarne lub nie widać drukarki?**
+- Upewnij się że sterowniki karty graficznej obsługują OpenGL 2.0+
+- Spróbuj zaktualizować sterowniki GPU

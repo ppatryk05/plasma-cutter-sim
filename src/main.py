@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication
+# Ensure the project root (parent of this file's directory) is on sys.path
+# so that `src.*` imports work whether this file is run directly or as a module.
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
-from src.ui.main_window import MainWindow
+from PyQt6.QtWidgets import QApplication  # noqa: E402
+
+from src.ui.main_window import MainWindow  # noqa: E402
 
 
 def main() -> int:

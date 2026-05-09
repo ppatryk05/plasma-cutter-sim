@@ -1,9 +1,18 @@
-numpy
-pygcode
-trimesh
-numpy-stl
-pymunk
-pyqt6
-pyqtgraph
-ursina
-numba
+# --- Wizualizacja 3D i GUI ---
+pyqt6          # okno główne, kontrolki, wykresy
+pyqtgraph      # viewport 3D (OpenGL) + wykresy diagnostyczne
+
+# --- Obliczenia numeryczne ---
+numpy          # wektory, interpolacja, macierze
+
+# --- Geometria i G-code ---
+pygcode        # parser G-code (G0/G1/M104 itp.)
+trimesh        # wczytywanie modeli STL
+numpy-stl      # operacje na plikach .stl
+
+# --- Fizyka ---
+pymunk         # silnik fizyki 2.5D (kolizje, ograniczenia)
+
+# --- Opcjonalne (przyspieszenie obliczeń) ---
+numba          # JIT-kompilacja krytycznych fragmentów symulacji
+ursina         # alternatywny silnik 3D (zarezerwowany do rozbudowy)
