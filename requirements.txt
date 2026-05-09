@@ -1,0 +1,9 @@
+numpy
+pygcode
+trimesh
+numpy-stl
+pymunk
+pyqt6
+pyqtgraph
+ursina
+numba
