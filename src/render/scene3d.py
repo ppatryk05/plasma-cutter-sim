@@ -8,25 +8,25 @@ from src.core.types import PrinterConfig
 from src.sim.simulator import SimulationFrame
 
 # ---------------------------------------------------------------------------
-# Color palette  (designed for a light/gray background)
+# Color palette  — dark studio theme (high contrast, all parts clearly visible)
 # ---------------------------------------------------------------------------
-C_BG           = (0.88, 0.88, 0.92, 1.0)   # viewport background – warm light gray
-C_BED_GLASS    = (0.10, 0.12, 0.17, 1.0)   # dark navy glass plate
-C_BED_FRAME    = (0.52, 0.53, 0.57, 1.0)   # aluminium bed frame
-C_BED_UNDER    = (0.42, 0.43, 0.46, 1.0)   # bed underside
-C_GRID         = (0.45, 0.45, 0.50, 0.65)  # grid lines on bed
-C_FRAME_COL    = (0.28, 0.30, 0.34, 1.0)   # outer frame corner columns
-C_FRAME_BEAM   = (0.32, 0.33, 0.37, 1.0)   # outer frame top beams
-C_BUILD_VOL    = (0.20, 0.45, 0.95, 0.40)  # build-volume wireframe
-C_ROD          = (0.12, 0.12, 0.15, 1.0)   # gantry rods  (very dark)
-C_ROD_END      = (0.20, 0.20, 0.24, 1.0)   # rod end-connectors
-C_BRACKET      = (0.25, 0.26, 0.30, 1.0)   # bracket arms
-C_TOOLHEAD     = (0.94, 0.94, 0.96, 1.0)   # toolhead body (near-white)
-C_FAN          = (0.10, 0.10, 0.13, 1.0)   # fan panel
-C_HEATSINK     = (0.20, 0.22, 0.26, 1.0)   # heatsink
-C_NOZZLE_BLK   = (0.70, 0.30, 0.04, 1.0)   # nozzle block (hot copper)
-C_NOZZLE_TIP   = (1.00, 0.62, 0.10, 1.0)   # nozzle tip glow
-C_FILAMENT     = (1.00, 0.42, 0.02, 1.0)   # extruded filament
+C_BG           = (0.96, 0.96, 0.97, 1.0)   # viewport background – clean white
+C_BED_GLASS    = (0.07, 0.09, 0.14, 1.0)   # very dark navy glass plate
+C_BED_FRAME    = (0.40, 0.42, 0.48, 1.0)   # aluminium bed frame – mid silver
+C_BED_UNDER    = (0.30, 0.31, 0.36, 1.0)   # bed underside
+C_GRID         = (0.30, 0.34, 0.50, 0.80)  # bright blue-gray grid on bed
+C_FRAME_COL    = (0.28, 0.30, 0.35, 1.0)   # outer frame columns – dark steel
+C_FRAME_BEAM   = (0.25, 0.27, 0.32, 1.0)   # outer frame beams – dark steel
+C_BUILD_VOL    = (0.20, 0.50, 0.95, 0.50)  # blue build-volume wireframe
+C_ROD          = (0.18, 0.18, 0.22, 1.0)   # gantry rods – dark charcoal (visible on white)
+C_ROD_END      = (0.25, 0.25, 0.30, 1.0)   # rod end-connectors
+C_BRACKET      = (0.30, 0.30, 0.35, 1.0)   # bracket arms
+C_TOOLHEAD     = (0.93, 0.94, 0.96, 1.0)   # toolhead body – crisp white
+C_FAN          = (0.06, 0.06, 0.09, 1.0)   # fan panel – near-black
+C_HEATSINK     = (0.22, 0.24, 0.30, 1.0)   # heatsink – dark blue-steel
+C_NOZZLE_BLK   = (0.82, 0.36, 0.04, 1.0)   # nozzle block – vivid copper/orange
+C_NOZZLE_TIP   = (1.00, 0.72, 0.15, 1.0)   # nozzle tip – bright hot glow
+C_FILAMENT     = (1.00, 0.45, 0.02, 1.0)   # extruded filament – vivid orange
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ class Scene3DWidget(gl.GLViewWidget):
         self._dep_pts: list[list[float]] = []
 
         super().__init__(parent=parent)
-        self.setBackgroundColor(C_BG)
+        self.setBackgroundColor((210, 212, 218, 255))  # light gray viewport
         self.setCameraPosition(distance=660, elevation=24, azimuth=225)
         self.pan(self.BX / 2, self.BY / 2, 40)
 
@@ -108,10 +108,12 @@ class Scene3DWidget(gl.GLViewWidget):
     def _build_static(self) -> None:
         bx, by, bz = self.BX, self.BY, self.BZ
         cx, cy = bx / 2, by / 2
-        M   = self.MARGIN
-        CS  = self.COL_SIZE
-        BED_T = 5.0
-        COL_H = bz + 40 + BED_T   # full column height
+        M      = self.MARGIN
+        CS     = self.COL_SIZE
+        BED_T  = 5.0
+        POST_H = 45.0
+        FLOOR_Z = -BED_T - POST_H             # z=0 of the floor
+        COL_H  = bz + 40 - FLOOR_Z            # column spans from floor to top frame
 
         # --- Bed glass surface ---
         self.addItem(_flat(0, 0, 0, bx, by, C_BED_GLASS))
@@ -124,17 +126,32 @@ class Scene3DWidget(gl.GLViewWidget):
             self.addItem(_flat(x0, y0, -BED_T, x1, y1, C_BED_FRAME))
         self.addItem(_flat(-M, -M, -BED_T, bx+M, by+M, C_BED_UNDER))
 
-        # --- Grid on bed ---
-        grid = gl.GLGridItem()
-        grid.scale(bx / 20, by / 20, 1)
-        grid.translate(cx, cy, 0.5)
-        grid.setColor(C_GRID)
-        self.addItem(grid)
+        # --- Grid on bed surface ---
+        bed_grid = gl.GLGridItem()
+        bed_grid.scale(bx / 20, by / 20, 1)
+        bed_grid.translate(cx, cy, 0.5)
+        bed_grid.setColor(C_GRID)
+        self.addItem(bed_grid)
 
-        # --- 4 corner columns (box mesh, thick & solid) ---
+        # --- Large floor grid (the surface the printer stands on) ---
+        FLOOR_SIZE = 600.0   # total floor width/depth in mm
+        floor_grid = gl.GLGridItem()
+        floor_grid.scale(FLOOR_SIZE / 10, FLOOR_SIZE / 10, 1)
+        floor_grid.translate(cx, cy, FLOOR_Z)
+        floor_grid.setColor((0.45, 0.47, 0.52, 0.55))
+        self.addItem(floor_grid)
+
+        # Solid floor plane (subtle dark rectangle under the grid)
+        self.addItem(_flat(
+            cx - FLOOR_SIZE/2, cy - FLOOR_SIZE/2, FLOOR_Z - 0.5,
+            cx + FLOOR_SIZE/2, cy + FLOOR_SIZE/2,
+            (0.76, 0.77, 0.80, 1.0),
+        ))
+
+        # --- 4 corner columns (box mesh): span from floor to top frame ---
         for px, py in [(-M,-M),(bx+M,-M),(bx+M,by+M),(-M,by+M)]:
             col = _mesh(CS, CS, COL_H, C_FRAME_COL, edges=True, edge_color=(0,0,0,0.35))
-            col.translate(px, py, -BED_T + COL_H / 2)
+            col.translate(px, py, FLOOR_Z + COL_H / 2)
             self.addItem(col)
 
         # --- Top frame beams (box mesh, solid rectangular section) ---
@@ -193,21 +210,21 @@ class Scene3DWidget(gl.GLViewWidget):
         # Nozzle block – hot-copper colored
         self._nozzle_block= _mesh(11, 11, 13, C_NOZZLE_BLK)
 
-        # Nozzle tip – bright glowing point
+        # Nozzle tip – bright glowing point (larger for visibility)
         self._nozzle_tip  = gl.GLScatterPlotItem(
-            pos=np.array([[0.,0.,0.]]), size=11,
+            pos=np.array([[0.,0.,0.]]), size=15,
             color=C_NOZZLE_TIP, pxMode=True,
         )
 
         # Active filament strand (nozzle → bed, shown during extrusion)
         self._fil_strand  = gl.GLLinePlotItem(
-            pos=np.zeros((2,3)), color=C_FILAMENT, width=3, antialias=True,
+            pos=np.zeros((2,3)), color=C_FILAMENT, width=4, antialias=True,
         )
         self._fil_strand.setVisible(False)
 
-        # Accumulated deposition
+        # Accumulated deposition (thick, very visible)
         self._deposition  = gl.GLLinePlotItem(
-            pos=np.empty((0,3)), color=C_FILAMENT, width=5,
+            pos=np.empty((0,3)), color=C_FILAMENT, width=6,
             mode='lines', antialias=True,
         )
 
