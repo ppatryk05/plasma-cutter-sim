@@ -8,33 +8,33 @@ from src.core.types import PrinterConfig
 from src.sim.simulator import SimulationFrame
 
 # ---------------------------------------------------------------------------
-# Color palette  — dark studio theme (high contrast, all parts clearly visible)
+# Color palette
 # ---------------------------------------------------------------------------
-C_BG           = (0.96, 0.96, 0.97, 1.0)   # viewport background – clean white
-C_BED_GLASS    = (0.07, 0.09, 0.14, 1.0)   # very dark navy glass plate
-C_BED_FRAME    = (0.40, 0.42, 0.48, 1.0)   # aluminium bed frame – mid silver
-C_BED_UNDER    = (0.30, 0.31, 0.36, 1.0)   # bed underside
-C_GRID         = (0.30, 0.34, 0.50, 0.80)  # bright blue-gray grid on bed
-C_FRAME_COL    = (0.28, 0.30, 0.35, 1.0)   # outer frame columns – dark steel
-C_FRAME_BEAM   = (0.25, 0.27, 0.32, 1.0)   # outer frame beams – dark steel
-C_BUILD_VOL    = (0.20, 0.50, 0.95, 0.50)  # blue build-volume wireframe
-C_ROD          = (0.18, 0.18, 0.22, 1.0)   # gantry rods – dark charcoal (visible on white)
-C_ROD_END      = (0.25, 0.25, 0.30, 1.0)   # rod end-connectors
-C_BRACKET      = (0.30, 0.30, 0.35, 1.0)   # bracket arms
-C_TOOLHEAD     = (0.93, 0.94, 0.96, 1.0)   # toolhead body – crisp white
-C_FAN          = (0.06, 0.06, 0.09, 1.0)   # fan panel – near-black
-C_HEATSINK     = (0.22, 0.24, 0.30, 1.0)   # heatsink – dark blue-steel
-C_NOZZLE_BLK   = (0.82, 0.36, 0.04, 1.0)   # nozzle block – vivid copper/orange
-C_NOZZLE_TIP   = (1.00, 0.72, 0.15, 1.0)   # nozzle tip – bright hot glow
-C_FILAMENT     = (1.00, 0.45, 0.02, 1.0)   # extruded filament – vivid orange
+C_BED_GLASS  = (0.07, 0.09, 0.14, 1.0)
+C_BED_FRAME  = (0.40, 0.42, 0.48, 1.0)
+C_BED_UNDER  = (0.30, 0.31, 0.36, 1.0)
+C_GRID       = (0.30, 0.34, 0.50, 0.80)
+C_FRAME_COL  = (0.28, 0.30, 0.35, 1.0)
+C_FRAME_BEAM = (0.25, 0.27, 0.32, 1.0)
+C_BUILD_VOL  = (0.20, 0.50, 0.95, 0.50)
+C_XRAIL      = (0.58, 0.60, 0.68, 1.0)   # X-axis rail beams
+C_ZCAR       = (0.50, 0.52, 0.60, 1.0)   # Z-axis carriage blocks
+C_TOOLHEAD   = (0.93, 0.94, 0.96, 1.0)
+C_FAN        = (0.06, 0.06, 0.09, 1.0)
+C_HEATSINK   = (0.50, 0.53, 0.60, 1.0)
+C_HEAT_BREAK = (0.35, 0.35, 0.42, 1.0)
+C_HEATER_BLK = (0.82, 0.36, 0.04, 1.0)
+C_NOZZLE     = (0.75, 0.60, 0.10, 1.0)
+C_NOZZLE_TIP = (1.00, 0.72, 0.15, 1.0)
+C_FILAMENT   = (1.00, 0.45, 0.02, 1.0)
+C_TRAVEL     = (0.20, 0.55, 1.00, 0.55)
 
 
 # ---------------------------------------------------------------------------
-# Mesh / geometry helpers
+# Geometry helpers
 # ---------------------------------------------------------------------------
 
 def _box_mesh(w: float, d: float, h: float) -> MeshData:
-    """Solid box mesh centered at origin: w=X, d=Y, h=Z."""
     hw, hd, hh = w / 2, d / 2, h / 2
     v = np.array([
         [-hw,-hd,-hh],[ hw,-hd,-hh],[ hw, hd,-hh],[-hw, hd,-hh],
@@ -60,18 +60,22 @@ def _line_pairs(pairs: list) -> np.ndarray:
     return np.array(out, dtype=float)
 
 
-def _mesh(w, d, h, color, edges=False, edge_color=(0,0,0,0.55)) -> gl.GLMeshItem:
-    return gl.GLMeshItem(
+def _mesh(w, d, h, color, edges=False, ec=(0, 0, 0, 0.55)) -> gl.GLMeshItem:
+    item = gl.GLMeshItem(
         meshdata=_box_mesh(w, d, h), smooth=False, color=color,
-        shader='shaded', drawEdges=edges, edgeColor=edge_color,
+        shader='shaded', drawEdges=edges, edgeColor=ec,
     )
+    item.setGLOptions('opaque')
+    return item
 
 
 def _flat(x0, y0, z, x1, y1, color) -> gl.GLMeshItem:
-    return gl.GLMeshItem(
+    item = gl.GLMeshItem(
         meshdata=_rect_mesh(x0, y0, z, x1, y1), smooth=False,
         color=color, shader='shaded',
     )
+    item.setGLOptions('opaque')
+    return item
 
 
 # ---------------------------------------------------------------------------
@@ -79,28 +83,45 @@ def _flat(x0, y0, z, x1, y1, color) -> gl.GLMeshItem:
 # ---------------------------------------------------------------------------
 
 class Scene3DWidget(gl.GLViewWidget):
-    """Realistic 3D printer 3D viewport with light background."""
+    """
+    3D printer viewport.
+
+    Gantry: two thick GLLinePlotItem rods (front + back) spanning the full
+    X width, connected at each end by a short end-connector line, with
+    bracket arms descending to the toolhead carriage.  All rods move with
+    Y and Z.  The toolhead assembly hangs from the brackets.
+
+    Hotend stack (no mesh overlaps, z = nozzle-tip Z):
+      z+ 0..z+ 3   nozzle lo  (6×6×3,  brass)
+      z+ 3..z+ 8   nozzle hi (10×10×5, brass)
+      z+ 8..z+20   heater block (16×16×12, copper)
+      z+20..z+30   heat break  ( 5× 5×10, steel)
+      z+30..z+44   5 heatsink fins (22×22×2, 1 mm gaps)
+      z+44..z+74   toolhead carriage (44×44×30, white)
+      z+63         rod centre passes through carriage
+    """
 
     ROD_Y_OFFSET = 18.0
     ROD_Z_OFFSET = 63.0
     MARGIN       = 18.0
-    COL_SIZE     = 14.0   # cross-section side of corner columns
+    COL_SIZE     = 14.0
 
     def __init__(self, config: PrinterConfig | None = None, parent=None) -> None:
         cfg = config or PrinterConfig()
         self.BX: float = cfg.build_x
         self.BY: float = cfg.build_y
         self.BZ: float = cfg.build_z
-        self._dep_pts: list[list[float]] = []
+        self._dep_pts:    list[list[float]] = []
+        self._travel_pts: list[list[float]] = []
 
         super().__init__(parent=parent)
-        self.setBackgroundColor((210, 212, 218, 255))  # light gray viewport
+        self.setBackgroundColor((210, 212, 218, 255))
         self.setCameraPosition(distance=660, elevation=24, azimuth=225)
         self.pan(self.BX / 2, self.BY / 2, 40)
 
         self._build_static()
         self._build_dynamic()
-        self._update_moving_parts(0.0, 0.0, 0.0, extruding=False)
+        self._update_moving_parts(self.BX / 2, self.BY / 2, 5.0, extruding=False)
 
     # ------------------------------------------------------------------
     # Static geometry
@@ -108,70 +129,57 @@ class Scene3DWidget(gl.GLViewWidget):
     def _build_static(self) -> None:
         bx, by, bz = self.BX, self.BY, self.BZ
         cx, cy = bx / 2, by / 2
-        M      = self.MARGIN
-        CS     = self.COL_SIZE
+        M  = self.MARGIN
+        CS = self.COL_SIZE
         BED_T  = 5.0
         POST_H = 45.0
-        FLOOR_Z = -BED_T - POST_H             # z=0 of the floor
-        COL_H  = bz + 40 - FLOOR_Z            # column spans from floor to top frame
+        FLOOR_Z = -BED_T - POST_H
+        COL_H   = bz + 40 - FLOOR_Z
 
-        # --- Bed glass surface ---
+        # Bed
         self.addItem(_flat(0, 0, 0, bx, by, C_BED_GLASS))
-
-        # --- Bed aluminium frame border ---
         for x0, y0, x1, y1 in [
-            (-M, -M, bx+M, 0), (-M, by, bx+M, by+M),
-            (-M,  0, 0,    by), (bx,  0, bx+M, by),
+            (-M,-M, bx+M,  0), (-M, by, bx+M, by+M),
+            (-M, 0,   0,  by), (bx,  0, bx+M, by  ),
         ]:
             self.addItem(_flat(x0, y0, -BED_T, x1, y1, C_BED_FRAME))
         self.addItem(_flat(-M, -M, -BED_T, bx+M, by+M, C_BED_UNDER))
 
-        # --- Grid on bed surface ---
         bed_grid = gl.GLGridItem()
         bed_grid.scale(bx / 20, by / 20, 1)
         bed_grid.translate(cx, cy, 0.5)
         bed_grid.setColor(C_GRID)
         self.addItem(bed_grid)
 
-        # --- Large floor grid (the surface the printer stands on) ---
-        FLOOR_SIZE = 600.0   # total floor width/depth in mm
-        floor_grid = gl.GLGridItem()
-        floor_grid.scale(FLOOR_SIZE / 10, FLOOR_SIZE / 10, 1)
-        floor_grid.translate(cx, cy, FLOOR_Z)
-        floor_grid.setColor((0.45, 0.47, 0.52, 0.55))
-        self.addItem(floor_grid)
+        # Floor
+        FSIZE = 600.0
+        fg = gl.GLGridItem()
+        fg.scale(FSIZE / 10, FSIZE / 10, 1)
+        fg.translate(cx, cy, FLOOR_Z)
+        fg.setColor((0.45, 0.47, 0.52, 0.55))
+        self.addItem(fg)
+        self.addItem(_flat(cx-FSIZE/2, cy-FSIZE/2, FLOOR_Z-0.5,
+                           cx+FSIZE/2, cy+FSIZE/2, (0.76,0.77,0.80,1.0)))
 
-        # Solid floor plane (subtle dark rectangle under the grid)
-        self.addItem(_flat(
-            cx - FLOOR_SIZE/2, cy - FLOOR_SIZE/2, FLOOR_Z - 0.5,
-            cx + FLOOR_SIZE/2, cy + FLOOR_SIZE/2,
-            (0.76, 0.77, 0.80, 1.0),
-        ))
-
-        # --- 4 corner columns (box mesh): span from floor to top frame ---
+        # 4 corner columns
         for px, py in [(-M,-M),(bx+M,-M),(bx+M,by+M),(-M,by+M)]:
-            col = _mesh(CS, CS, COL_H, C_FRAME_COL, edges=True, edge_color=(0,0,0,0.35))
+            col = _mesh(CS, CS, COL_H, C_FRAME_COL, edges=True, ec=(0,0,0,0.35))
             col.translate(px, py, FLOOR_Z + COL_H / 2)
             self.addItem(col)
 
-        # --- Top frame beams (box mesh, solid rectangular section) ---
+        # Top beams
         top_z = bz + 40
-        BEAM_H = 12.0
-        BEAM_D = 12.0
-        # front/back beams (along X)
+        BH, BD = 12.0, 12.0
         for ry in (-M, by+M):
-            beam = _mesh(bx + 2*M + CS, BEAM_D, BEAM_H, C_FRAME_BEAM,
-                         edges=True, edge_color=(0,0,0,0.30))
-            beam.translate(cx, ry, top_z + BEAM_H/2)
-            self.addItem(beam)
-        # left/right beams (along Y)
+            b = _mesh(bx+2*M+CS, BD, BH, C_FRAME_BEAM, edges=True, ec=(0,0,0,0.30))
+            b.translate(cx, ry, top_z + BH/2)
+            self.addItem(b)
         for rx in (-M, bx+M):
-            beam = _mesh(BEAM_D, by + 2*M + CS, BEAM_H, C_FRAME_BEAM,
-                         edges=True, edge_color=(0,0,0,0.30))
-            beam.translate(rx, cy, top_z + BEAM_H/2)
-            self.addItem(beam)
+            b = _mesh(BD, by+2*M+CS, BH, C_FRAME_BEAM, edges=True, ec=(0,0,0,0.30))
+            b.translate(rx, cy, top_z + BH/2)
+            self.addItem(b)
 
-        # --- Build-volume wireframe ---
+        # Build-volume wireframe
         c8 = [(0,0,0),(bx,0,0),(bx,by,0),(0,by,0),
               (0,0,bz),(bx,0,bz),(bx,by,bz),(0,by,bz)]
         ev  = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),
@@ -186,89 +194,131 @@ class Scene3DWidget(gl.GLViewWidget):
     # ------------------------------------------------------------------
     def _build_dynamic(self) -> None:
         bx, M = self.BX, self.MARGIN
+        RY = self.ROD_Y_OFFSET
 
-        rod_kw = dict(color=C_ROD, width=13, antialias=True)
-        self._rod_f  = gl.GLLinePlotItem(pos=np.zeros((2,3)), **rod_kw)
-        self._rod_b  = gl.GLLinePlotItem(pos=np.zeros((2,3)), **rod_kw)
+        # ── Gantry: two X-rail profiles + two Z-carriage blocks ──────────
+        #  X-rails span the full width (column-to-column), depth 14 mm, height 12 mm
+        #  Z-carriages sit at each end column, depth spans both rails + gap
+        XRAIL_LEN = bx + 2 * M          # e.g. 256 mm  (column centre to centre)
+        XRAIL_D   = 14.0
+        XRAIL_H   = 12.0
+        ZCAR_W    = 24.0
+        ZCAR_D    = RY * 2 + XRAIL_D    # 50 mm – spans both rails
+        ZCAR_H    = 22.0
 
-        end_kw = dict(color=C_ROD_END, width=9, antialias=True)
-        self._rod_el = gl.GLLinePlotItem(pos=np.zeros((2,3)), **end_kw)
-        self._rod_er = gl.GLLinePlotItem(pos=np.zeros((2,3)), **end_kw)
+        self._xrail_f = _mesh(XRAIL_LEN, XRAIL_D, XRAIL_H, C_XRAIL,
+                              edges=True, ec=(0, 0, 0, 0.22))
+        self._xrail_b = _mesh(XRAIL_LEN, XRAIL_D, XRAIL_H, C_XRAIL,
+                              edges=True, ec=(0, 0, 0, 0.22))
+        self._zcar_l  = _mesh(ZCAR_W, ZCAR_D, ZCAR_H, C_ZCAR,
+                              edges=True, ec=(0, 0, 0, 0.28))
+        self._zcar_r  = _mesh(ZCAR_W, ZCAR_D, ZCAR_H, C_ZCAR,
+                              edges=True, ec=(0, 0, 0, 0.28))
 
-        brk_kw = dict(color=C_BRACKET, width=6, antialias=True)
-        self._brk_lf = gl.GLLinePlotItem(pos=np.zeros((2,3)), **brk_kw)
-        self._brk_lb = gl.GLLinePlotItem(pos=np.zeros((2,3)), **brk_kw)
-        self._brk_rf = gl.GLLinePlotItem(pos=np.zeros((2,3)), **brk_kw)
-        self._brk_rb = gl.GLLinePlotItem(pos=np.zeros((2,3)), **brk_kw)
+        # ── Toolhead carriage ────────────────────────────────────────────
+        self._toolhead = _mesh(44, 44, 30, C_TOOLHEAD, edges=True, ec=(0,0,0,0.50))
+        self._fan_body = _mesh(26,  6, 26, C_FAN)
 
-        # Toolhead – big near-white box with visible dark edges
-        self._toolhead    = _mesh(52, 52, 54, C_TOOLHEAD,  edges=True, edge_color=(0,0,0,0.55))
-        # Fan panel – dark recessed square
-        self._fan_body    = _mesh(28,  4, 28, C_FAN)
-        # Heatsink – dark block below toolhead with edge lines
-        self._heatsink    = _mesh(20, 20, 22, C_HEATSINK,  edges=True, edge_color=(0,0,0,0.40))
-        # Nozzle block – hot-copper colored
-        self._nozzle_block= _mesh(11, 11, 13, C_NOZZLE_BLK)
+        # ── Heatsink fins (5 × 22×22×2) ─────────────────────────────────
+        self._fins: list[gl.GLMeshItem] = [
+            _mesh(22, 22, 2, C_HEATSINK, edges=True, ec=(0,0,0,0.22))
+            for _ in range(5)
+        ]
 
-        # Nozzle tip – bright glowing point (larger for visibility)
-        self._nozzle_tip  = gl.GLScatterPlotItem(
-            pos=np.array([[0.,0.,0.]]), size=15,
+        # ── Heat break ───────────────────────────────────────────────────
+        self._heat_break = _mesh(5, 5, 10, C_HEAT_BREAK)
+
+        # ── Heater block (copper) ────────────────────────────────────────
+        self._heater_blk = _mesh(16, 16, 12, C_HEATER_BLK,
+                                 edges=True, ec=(0,0,0,0.28))
+
+        # ── Nozzle (brass stepped) ───────────────────────────────────────
+        self._nozzle_hi = _mesh(10, 10, 5, C_NOZZLE)
+        self._nozzle_lo = _mesh( 6,  6, 3, C_NOZZLE)
+
+        # ── Nozzle tip glow ──────────────────────────────────────────────
+        self._nozzle_tip = gl.GLScatterPlotItem(
+            pos=np.array([[0.,0.,0.]]), size=16,
             color=C_NOZZLE_TIP, pxMode=True,
         )
 
-        # Active filament strand (nozzle → bed, shown during extrusion)
-        self._fil_strand  = gl.GLLinePlotItem(
+        # ── Filament strand ──────────────────────────────────────────────
+        self._fil_strand = gl.GLLinePlotItem(
             pos=np.zeros((2,3)), color=C_FILAMENT, width=4, antialias=True,
         )
+        self._fil_strand.setGLOptions('opaque')
         self._fil_strand.setVisible(False)
 
-        # Accumulated deposition (thick, very visible)
-        self._deposition  = gl.GLLinePlotItem(
-            pos=np.empty((0,3)), color=C_FILAMENT, width=6,
+        # ── Print paths (opaque so meshes occlude them correctly) ─────────
+        self._deposition = gl.GLLinePlotItem(
+            pos=np.empty((0,3)), color=C_FILAMENT, width=11,
             mode='lines', antialias=True,
         )
+        self._deposition.setGLOptions('opaque')
 
-        for item in (
-            self._rod_f, self._rod_b, self._rod_el, self._rod_er,
-            self._brk_lf, self._brk_lb, self._brk_rf, self._brk_rb,
+        self._travel_lines = gl.GLLinePlotItem(
+            pos=np.empty((0,3)), color=C_TRAVEL, width=1.5,
+            mode='lines', antialias=True,
+        )
+        self._travel_lines.setGLOptions('opaque')
+        self._travel_lines.setVisible(True)
+
+        # Add paths first so meshes render on top of them
+        for item in [
+            self._deposition, self._travel_lines,
+            self._xrail_f, self._xrail_b,
+            self._zcar_l, self._zcar_r,
             self._toolhead, self._fan_body,
-            self._heatsink, self._nozzle_block,
-            self._nozzle_tip, self._fil_strand, self._deposition,
-        ):
+            *self._fins,
+            self._heat_break, self._heater_blk,
+            self._nozzle_hi, self._nozzle_lo,
+            self._nozzle_tip, self._fil_strand,
+        ]:
             self.addItem(item)
 
     # ------------------------------------------------------------------
     # Per-frame update
     # ------------------------------------------------------------------
-    def _update_moving_parts(self, x: float, y: float, z: float, extruding: bool) -> None:
+    def _update_moving_parts(self, x: float, y: float, z: float,
+                              extruding: bool) -> None:
         bx, M = self.BX, self.MARGIN
+        cx  = bx / 2
         RY  = self.ROD_Y_OFFSET
         RZ  = z + self.ROD_Z_OFFSET
         yf  = y - RY
         yb  = y + RY
 
-        # Gantry rods
-        self._rod_f.setData(pos=np.array([[-M,yf,RZ],[bx+M,yf,RZ]], dtype=float))
-        self._rod_b.setData(pos=np.array([[-M,yb,RZ],[bx+M,yb,RZ]], dtype=float))
-        self._rod_el.setData(pos=np.array([[-M,yf,RZ],[-M,yb,RZ]], dtype=float))
-        self._rod_er.setData(pos=np.array([[bx+M,yf,RZ],[bx+M,yb,RZ]], dtype=float))
+        # X-rail beams (front + back), centred in X, moving with Y and Z
+        self._xrail_f.resetTransform(); self._xrail_f.translate(cx, yf, RZ)
+        self._xrail_b.resetTransform(); self._xrail_b.translate(cx, yb, RZ)
 
-        # Bracket arms (left x-25, right x+25, front/back rod)
-        th_top = z + 64
-        for ry, lattr, rattr in [(yf,'_brk_lf','_brk_rf'),(yb,'_brk_lb','_brk_rb')]:
-            getattr(self,lattr).setData(pos=np.array([[x-26,ry,RZ],[x-26,ry,th_top]],dtype=float))
-            getattr(self,rattr).setData(pos=np.array([[x+26,ry,RZ],[x+26,ry,th_top]],dtype=float))
+        # Z-carriages at column positions (left=-M, right=BX+M), moving with Y and Z
+        self._zcar_l.resetTransform();  self._zcar_l.translate(-M,   y, RZ)
+        self._zcar_r.resetTransform();  self._zcar_r.translate(bx+M, y, RZ)
 
-        # Toolhead body centre at z+38
-        th_cz = z + 38
-        self._toolhead.resetTransform();     self._toolhead.translate(x, y, th_cz)
-        self._fan_body.resetTransform();     self._fan_body.translate(x, y - 28, th_cz + 4)
-        self._heatsink.resetTransform();     self._heatsink.translate(x, y, z + 15)
-        self._nozzle_block.resetTransform(); self._nozzle_block.translate(x, y, z + 5.5)
+        # Toolhead carriage — z+44..z+74, rods at z+63 pass through it
+        th_cz = z + 59
+        self._toolhead.resetTransform(); self._toolhead.translate(x, y, th_cz)
+        self._fan_body.resetTransform(); self._fan_body.translate(x, y - 25, th_cz)
+
+        # Heatsink fins: z+31..z+43 (step 3 mm, no overlap with carriage at z+44)
+        for i, fin in enumerate(self._fins):
+            fin.resetTransform(); fin.translate(x, y, z + 31 + i * 3)
+
+        # Heat break: z+20..z+30
+        self._heat_break.resetTransform(); self._heat_break.translate(x, y, z + 25)
+
+        # Heater block: z+8..z+20
+        self._heater_blk.resetTransform(); self._heater_blk.translate(x, y, z + 14)
+
+        # Nozzle: hi z+3..z+8, lo z+0..z+3
+        self._nozzle_hi.resetTransform(); self._nozzle_hi.translate(x, y, z + 5.5)
+        self._nozzle_lo.resetTransform(); self._nozzle_lo.translate(x, y, z + 1.5)
         self._nozzle_tip.setData(pos=np.array([[x, y, z]]))
 
         if extruding and z > 0.05:
-            self._fil_strand.setData(pos=np.array([[x,y,z],[x,y,0.0]],dtype=float))
+            self._fil_strand.setData(
+                pos=np.array([[x,y,z],[x,y,0.0]], dtype=float))
             self._fil_strand.setVisible(True)
         else:
             self._fil_strand.setVisible(False)
@@ -276,19 +326,35 @@ class Scene3DWidget(gl.GLViewWidget):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def reset_scene(self) -> None:
-        self._dep_pts = []
-        self._deposition.setData(pos=np.empty((0,3)))
-        self._update_moving_parts(0.0, 0.0, 0.0, extruding=False)
+    def set_show_travel(self, visible: bool) -> None:
+        self._travel_lines.setVisible(visible)
 
-    def update_frame(self, previous: SimulationFrame | None, frame: SimulationFrame) -> None:
+    def reset_scene(self) -> None:
+        self._dep_pts    = []
+        self._travel_pts = []
+        self._deposition.setData(pos=np.empty((0, 3)))
+        self._travel_lines.setData(pos=np.empty((0, 3)))
+        self._update_moving_parts(self.BX / 2, self.BY / 2, 5.0, extruding=False)
+
+    # Minimum XY+Z displacement (mm) to record a path segment.
+    # Filters interpolation micro-steps that create a "dashed" appearance.
+    _MIN_SEG_MM = 0.25
+
+    def update_frame(self, previous: SimulationFrame | None,
+                     frame: SimulationFrame) -> None:
         sx, sy, sz = frame.state.x, frame.state.y, frame.state.z
         extruding = previous is not None and frame.state.e > previous.state.e
         self._update_moving_parts(sx, sy, sz, extruding=extruding)
 
-        if extruding:
-            self._dep_pts.extend([
-                [previous.state.x, previous.state.y, previous.state.z],
-                [sx, sy, sz],
-            ])
-            self._deposition.setData(pos=np.array(self._dep_pts))
+        if previous is not None:
+            px, py, pz = previous.state.x, previous.state.y, previous.state.z
+            seg_len_sq = (sx-px)**2 + (sy-py)**2 + (sz-pz)**2
+            if seg_len_sq < self._MIN_SEG_MM ** 2:
+                return  # skip sub-threshold micro-segments
+            seg = [[px, py, pz], [sx, sy, sz]]
+            if extruding:
+                self._dep_pts.extend(seg)
+                self._deposition.setData(pos=np.array(self._dep_pts))
+            else:
+                self._travel_pts.extend(seg)
+                self._travel_lines.setData(pos=np.array(self._travel_pts))

@@ -1,6 +1,9 @@
 """Entry point — run this file directly to start the simulator."""
-from src.main import main
 import sys
+from src.main import main
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        pass

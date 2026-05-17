@@ -5,6 +5,7 @@ from pathlib import Path
 import pyqtgraph as pg
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -147,6 +148,11 @@ class MainWindow(QMainWindow):
             lambda v: self._speed_label.setText(f"Prędkość: {v}×")
         )
         sidebar_layout.addWidget(self.speed)
+
+        self._travel_cb = QCheckBox("Pokaż ruchy jałowe")
+        self._travel_cb.setChecked(True)
+        self._travel_cb.toggled.connect(self.scene.set_show_travel)
+        sidebar_layout.addWidget(self._travel_cb)
 
         sidebar_layout.addWidget(QLabel("Temperatura [°C]:"))
         self.temp_plot = pg.PlotWidget()
